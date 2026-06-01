@@ -3,6 +3,7 @@ using HarmonyLib;
 using MelonLoader;
 using MelonLoader.Preferences;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 
 [assembly: MelonInfo(typeof(Grime2Mod.Core), "Grime2Mod", "1.0.0", "jw11-modder", null)]
@@ -500,6 +501,7 @@ namespace Grime2Mod
 
         public override void OnUpdate()
         {
+
             if (Event.current != null)
                 if ((Event.current.keyCode == (configMenuToggle.Value)) && (Event.current.type == EventType.KeyDown))
                 {
@@ -516,6 +518,8 @@ namespace Grime2Mod
 
         public static void SwitchMenu()
         {
+
+
             if (!showCheatsPopup)
             {
                 lastLockMode = Cursor.lockState;
@@ -524,25 +528,26 @@ namespace Grime2Mod
                 Cursor.visible = true;
                 lastEventSys = EventSystem.current;
                 lastInputModule = EventSystem.current.currentInputModule;
-                lastEventSys.enabled = false;
                 lastInputModule.DeactivateModule();
+                lastEventSys.enabled = false;
                 jModEventSys.enabled = true;
                 jModEventSys.m_CurrentInputModule?.ActivateModule();
+                showCheatsPopup = !showCheatsPopup;
             }
             else
             {
                 Cursor.lockState = lastLockMode;
                 Cursor.visible = lastVisibleState;
-                Event.current.Use();
-                jModEventSys.enabled = false;
+                InputSystem.TryResetDevice(Mouse.current);
                 jModEventSys.currentInputModule?.DeactivateModule();
+                jModEventSys.enabled = false;  
                 lastEventSys.enabled = true;
                 lastInputModule.ActivateModule();
                 lastEventSys.m_CurrentInputModule = lastInputModule;
-                Event.current.Use();
                 MelonPreferences.Save();
+                showCheatsPopup = !showCheatsPopup;
             }
-            showCheatsPopup = !showCheatsPopup;
+
         }
 
         public static void ShowMenu()
@@ -584,8 +589,6 @@ namespace Grime2Mod
                 if (GUI.Button(new Rect(325, 810, 200, 35), "Save settings and close"))
                 {
                     SwitchMenu();
-                    Event.current.Use();
-                    Input.ResetInputAxes();
                 }
 
                 Vector2 mousePosition = Input.mousePosition;
@@ -593,12 +596,12 @@ namespace Grime2Mod
 
                 if (GUI.Button(_screenRect, string.Empty, JModStyleBlank))
                 {
-                    Event.current.Use();
+
                 }
 
                 if (jModWindowRect.Contains(mousePosition) && !((Event.current.keyCode == (configMenuToggle.Value)) && (Event.current.type == EventType.KeyDown)))
                 {
-                    Event.current.Use();
+
                 }
                 GUI.EndGroup();
             }
