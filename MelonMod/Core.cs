@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 
-[assembly: MelonInfo(typeof(Grime2Mod.Core), "Grime2Mod", "1.0.0", "jw11-modder", null)]
+[assembly: MelonInfo(typeof(Grime2Mod.Core), "Grime2Mod", "1.0.1", "jw11-modder", null)]
 [assembly: MelonGame("Clover Bite", "GRIME II")]
 
 namespace Grime2Mod
@@ -26,6 +26,8 @@ namespace Grime2Mod
         private static MelonPreferences_Entry<bool> configInfiniteItems;
         private static MelonPreferences_Entry<bool> configInfinitePaint;
         private static MelonPreferences_Entry<bool> configFreeReset;
+        private static MelonPreferences_Entry<bool> configAlwaysWarp;
+        private static MelonPreferences_Entry<bool> configShowMap;
 
         private static MelonPreferences_Entry<float> configPlayerDamageMultiplier;
         private static MelonPreferences_Entry<float> configPlayerMovementMultiplier;
@@ -115,11 +117,13 @@ namespace Grime2Mod
             configNoPlayerDamage = ToggleCategory.CreateEntry<bool>("configNoPlayerDamage", false, "Disable damage to player");
             configNoPlayerCooldown = ToggleCategory.CreateEntry<bool>("configNoPlayerCooldown", false, "No usables cooldown for player");
             configFreeReset = ToggleCategory.CreateEntry<bool>("configFreeReset", false, "No attribute reset cost");
-            configInfiniteCharge = ToggleCategory.CreateEntry<bool>("configInfiniteCharge", false, "Weapon charge doesn't decrease");
+            configInfiniteCharge = ToggleCategory.CreateEntry<bool>("configInfiniteCharge", false, "Weapon charges always max");
             configInfiniteBreath = ToggleCategory.CreateEntry<bool>("configInfiniteBreath", false, "Breath charges always max");
             configInfinitePaint = ToggleCategory.CreateEntry<bool>("configInfinitePaint", false, "Paint charges always max");
             configInfiniteForce = ToggleCategory.CreateEntry<bool>("configInfiniteForce", false, "Force (stamina) is always max");
             configInfiniteItems = ToggleCategory.CreateEntry<bool>("configInfiniteItems", false, "Stackable items amount doesn't decrease");
+            configAlwaysWarp = ToggleCategory.CreateEntry<bool>("configAlwaysWarp", false, "Enable warp to checkpoint without opening seals");
+            configShowMap = ToggleCategory.CreateEntry<bool>("configShowMap", false, "Reveal area map on enter");
             
             configPlayerDamageMultiplier = MultiplierFloatCategory.CreateEntry<float>("configPlayerDamageMultiplier", 1f, "Player damage multiplier", validator: new ValueRange<float>(1f, 20f));
             configPlayerMovementMultiplier = MultiplierFloatCategory.CreateEntry<float>("configPlayerMovementMultiplier", 1f, "Player movement speed multiplier", validator: new ValueRange<float>(1f, 5f));
@@ -166,9 +170,7 @@ namespace Grime2Mod
                             break;
                         }
                     case "JModConfiguration":
-                        {
                             break;
-                        }
                     default:
                         {
                             CustomCategoryList.Add(category);
@@ -198,39 +200,33 @@ namespace Grime2Mod
         }
 
         //configNoPlayerDamage
+
         [HarmonyPatch(typeof(CharacterCombatHandler), nameof(CharacterCombatHandler.TakeDamage))]
         class CharacterCombatHandlerPatch1
         {
             static bool Prefix(ref CharacterCombatHandler __instance, ref float damageAmount)
             {
                 if (!configNoPlayerDamage.Value || !__instance.isPlayer)
-                {
                     return true;
-                }
                 if (__instance.isPlayer)
-                {
-                    //Log("Damage taken by player original value prefix: " + damageAmount);
                     damageAmount = 0;
-                }
                 return true;
             }
 
         }
 
         //configNoPlayerCooldown
+
         [HarmonyPatch(typeof(CharacterHandler), nameof(CharacterHandler.Update))]
         class CharacterHandlerPatch1
         {
             static bool Prefix(ref CharacterHandler __instance)
             {
                 if (!configNoPlayerCooldown.Value || !__instance.isPlayer)
-                {
                     return true;
-                }
                 if (__instance.getCurrentConsumable != null)
                     if (__instance.getCurrentConsumable.cooldownTime != 0)
                     {
-                        //Log("Item cooldown original value prefix: " + __instance.getCurrentConsumable.cooldownTime);
                         __instance.getCurrentConsumable.cooldownTime = 0;
                         Data_Item_Usable_Consumable consumable = __instance.getCurrentConsumable.TryCast<Data_Item_Usable_Consumable>();
                         if (consumable != null)
@@ -238,43 +234,29 @@ namespace Grime2Mod
                     }
                 return true;
             }
-
         }
 
-        // Il2Cpp.CharacterScript_Player_MoldHandler
         [HarmonyPatch(typeof(CharacterScript_Player_MoldHandler), nameof(CharacterScript_Player_MoldHandler.GetUsableCooldown))]
         class Player_MoldHandlerPatch1
         {
             static void Postfix(ref CharacterScript_Player_MoldHandler __instance, ref float __result, Data_Item_Usable usable)
             {
                 if (!configNoPlayerCooldown.Value)
-                {
                     return;
-                }
-
                 if (__result > 0 && __instance.usableCooldowns != null)
-                {
-                    //Log("Consumable cooldown original value: " + __result);
                     if (__instance.usableCooldowns.ContainsKey(usable))
                         __instance.usableCooldowns[usable] = 0f;
-                }
             }
         }
 
-        // Il2Cpp.PlayerData_Inventory
         [HarmonyPatch(typeof(PlayerData_Inventory), nameof(PlayerData_Inventory.RemoveConsumableCharge))]
         class PlayerData_InventoryPatch1
         {
             static bool Prefix(ref PlayerData_Inventory __instance, ref int amount)
             {
                 if (!configNoPlayerCooldown.Value)
-                {
                     return true;
-                }
-
-                //Log("Consumable charge original value (-): " + amount);
                 amount = 0;
-
                 return true;
             }
         }
@@ -285,32 +267,26 @@ namespace Grime2Mod
             static bool Prefix(ref PlayerData_Inventory __instance, ref int amount)
             {
                 if (!configNoPlayerCooldown.Value)
-                {
                     return true;
-                }
-
-                //Log("Stackable charge original value (-): " + amount);
                 amount = 0;
-
                 return true;
             }
         }
 
 
         //configInfiniteCharge
-        // Il2Cpp.PlayerData_Inventory
+
         [HarmonyPatch(typeof(PlayerData_Inventory), nameof(PlayerData_Inventory.SetWeaponCharges))]
         class PlayerData_InventoryPatch3
         {
             static bool Prefix(ref PlayerData_Inventory __instance, ref float newAmount)
             {
                 if (!configInfiniteCharge.Value)
-                {
                     return true;
-                }
                 int maxcharge;
-                Data_Item_Equipable_Weapon weapon = __instance.equippedItems.mainWeapon?.itemMeta?.item?.TryCast<Data_Item_Equipable_Weapon>();
-                maxcharge = (weapon.maxCharges > 1) ? weapon.maxCharges : 1;
+                Data_Item_Equipable_Weapon weapon;
+                weapon = __instance.equippedItems?.mainWeapon?.itemMeta?.item?.TryCast<Data_Item_Equipable_Weapon>();
+                maxcharge = (weapon?.maxCharges > 1) ? weapon.maxCharges : 1;
                 if (newAmount < maxcharge)
                     newAmount = maxcharge;
                 return true;
@@ -354,29 +330,8 @@ namespace Grime2Mod
             }
         }
 
-        [HarmonyPatch(typeof(PlayerData_Attributes), nameof(PlayerData_Attributes.ResetAllAttributes))]
-        class PlayerData_AttributesResetPatch1
-        {
-            static bool Prefix(ref PlayerData_Attributes __instance)
-            {
-                if (!configFreeReset.Value)
-                    return true;
-                CharacterScript_Player_AttributesHandler.instance?.resetAttributesCost = 0;
-                return true;
-            }
-            static void Postfix(ref PlayerData_Attributes __instance)
-            {
-                if (!configFreeReset.Value)
-                    return;
-                CharacterScript_Player_AttributesHandler.instance?.resetAttributesCost = 0;
-            }
-
-        }
-
-
-
         //configInfiniteForce
-        // Il2Cpp.CharacterScript_Player_AttributesHandler
+
         [HarmonyPatch(typeof(CharacterScript_Player_AttributesHandler), nameof(CharacterScript_Player_AttributesHandler.PauseForceRegen))]
         class Player_AttributesHandlerPatch2
         {
@@ -404,6 +359,45 @@ namespace Grime2Mod
             }
         }
 
+        //configAlwaysWarp
+
+        [HarmonyPatch(typeof(MapHandler_InteractableMarker_Checkpoint), nameof(MapHandler_InteractableMarker_Checkpoint.SetCheckpoint))]
+        class InteractableMarker_CheckpointPatch1
+        {
+            static bool Prefix(ref bool isActive, ref MapHandler_InteractableMarker_Checkpoint __instance)
+            {
+                if (!configAlwaysWarp.Value)
+                    return true;
+                isActive = true;
+                return true;
+            }
+        }
+
+        //configShowMap
+
+        [HarmonyPatch(typeof(Volume_AreaTitle), nameof(Volume_AreaTitle.OnCharacterEnter))]
+        class Volume_AreaTitlePatch1
+        {
+            static void Postfix(ref Volume_AreaTitle __instance)
+            {
+                if (!configShowMap.Value)
+                    return;
+                MapHandler_Core.instance.RevealEntireArea(__instance.areaNameTerm);
+            }
+        }
+
+        [HarmonyPatch(typeof(SyncHandler.GeneralData), nameof(SyncHandler.GeneralData.GetBeaconsActivationLevel))]
+        class SyncHandlerGeneralDataPatch1
+        {
+            static void Postfix(ref int __result, ref SyncHandler.GeneralData __instance)
+            {
+                if (!configShowMap.Value)
+                    return;
+                if (__result == 0)
+                    __result = 1;
+            }
+        }
+
         //configPlayerDamageMultiplier
 
         [HarmonyPatch(typeof(CharacterCombatHandler), nameof(CharacterCombatHandler.TakeHit))]
@@ -421,7 +415,6 @@ namespace Grime2Mod
 
 
         //configInfiniteItems
-
         //configCurrencyMultiplier
         
         [HarmonyPatch(typeof(PlayerData_Inventory), nameof(PlayerData_Inventory.ModifyStackableItem))]
@@ -454,7 +447,6 @@ namespace Grime2Mod
             }
         }
 
-        // Il2Cpp.Data_Character
         [HarmonyPatch(typeof(Data_Character), nameof(Data_Character.Init))]
         class Data_CharacterPatch1
         {
@@ -504,10 +496,7 @@ namespace Grime2Mod
 
             if (Event.current != null)
                 if ((Event.current.keyCode == (configMenuToggle.Value)) && (Event.current.type == EventType.KeyDown))
-                {
                     SwitchMenu();
-                    //Log("Menu switched!");
-                }
         }
 
         public override void OnGUI()
@@ -518,8 +507,6 @@ namespace Grime2Mod
 
         public static void SwitchMenu()
         {
-
-
             if (!showCheatsPopup)
             {
                 lastLockMode = Cursor.lockState;
